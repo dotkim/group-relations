@@ -1,16 +1,8 @@
-const Mongo = require('./mongo');
-const db = new Mongo();
-const fs = require('fs');
+const Mssql = require('./mssql');
+const db = new Mssql();
 
 (async function () {
-  let groups = await db.groupsWithZero();
-  let objArr = [];
-  await groups.forEach(async (gobj) => {
-    let relations = await db.getGroupObj(gobj.name);
-    gobj['relations'] = relations;
-    return gobj;
-  });
-
-  console.log(objArr);
-  console.log('Done');
+  await db.connect();
+  let data = await db.insertUser('kimner');
+  console.log(data);
 })();
