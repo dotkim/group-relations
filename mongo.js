@@ -2,18 +2,28 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
-const adSchema = new Schema({
-  name: String,
-  canonicalName: String,
-  distinguishedName: String,
-  members: Array
-});
+const adSchema = new Schema(
+  {
+    name: String,
+    canonicalName: String,
+    distinguishedName: String,
+    members: Array
+  },
+  {
+    collection: 'ad'
+  }
+);
 
-const groupSchema = new Schema({
-  name: String,
-  src: String,
-  data: Object
-});
+const groupSchema = new Schema(
+  {
+    name: String,
+    src: String,
+    data: Object
+  },
+  {
+    collection: 'groups'
+  }
+);
 
 module.exports = class {
   constructor() {
@@ -21,8 +31,8 @@ module.exports = class {
       process.env.MONGOOSE_MONGO, {
         useNewUrlParser: true,
         useCreateIndex: true,                 // use this to remove the warning: DeprecationWarning: collection.ensureIndex is deprecated. Use createIndexes instead.
-        user: process.env.MONGOOSE_USERNAME,
-        pass: process.env.MONGOOSE_PASSWORD,
+        //user: process.env.MONGOOSE_USERNAME,
+        //pass: process.env.MONGOOSE_PASSWORD,
         dbName: process.env.MONGOOSE_DBNAME
       },
       function (err) {
@@ -36,13 +46,27 @@ module.exports = class {
   }
 
   async getAdGroups() {
-    return this.ad.find();
+    return await this.ad.find();
   }
 
   async groupsWithZero() {
-    return this.ad
+    return await this.ad
       .find()
       .where('members')
       .size(0);
+  }
+
+  async getGroupObj(name) {
+    try {
+      return await this.groups
+        .find({ 'data.groups': { $in: [ name ] } });
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+
+  async disconnect() {
+    mongoose.connection.close();
   }
 }
