@@ -11,13 +11,52 @@ const config = {
 
 module.exports = class {
   async connect() {
-    this.pool = await sql.connect(config);
+    try {
+      this.pool = await sql.connect(config);
+    }
+    catch (error) {
+      console.error(error);
+    }
   }
 
   async insertUser(username) {
-    return this.pool
-      .request()
-      .input('username', sql.NVarChar, username)
-      .execute('ActiveDirectory.InsertUsers');
+    try {
+      return this.pool
+        .request()
+        .input('username', sql.NVarChar, username)
+        .execute('ActiveDirectory.InsertUser');
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+
+  async insertGroup(groupname, cn, dn) {
+    try {
+      return this.pool
+        .request()
+        .input('GroupName', sql.NVarChar, groupname)
+        .input('CN', sql.NVarChar, cn)
+        .input('DN', sql.NVarChar, dn)
+        .execute('ActiveDirectory.InsertGroup');
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+
+  async insertGroupUser(group, user) {
+    try {
+      let gid = await this.pool.request().query(`SELECT GroupID FROM ActiveDirectory.Groups WHERE GroupName = '${group}'`);
+      let uid = await this.pool.request().query(`SELECT UserID FROM ActiveDirectory.Users WHERE Username = '${user}'`);
+      return this.pool
+        .request()
+        .input('GroupID', sql.Int, gid)
+        .input('UserID', sql.Int, uid)
+        .execute('ActiveDirectory.InsertGroupUser');
+    }
+    catch (error) {
+      console.error(error);
+    }
   }
 }

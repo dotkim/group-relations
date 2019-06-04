@@ -15,10 +15,14 @@ USE Relations;
 GO
 
 PRINT 'Dropping procedures';
---Drop Procedures-------------------------------  -----------------------------------------------
-IF OBJECT_ID('ActiveDirectory.InsertUsers', 'P')  IS NOT NULL DROP PROCEDURE ActiveDirectory.InsertUsers;
-IF OBJECT_ID('Auditing.ErrorLogging', 'P')	      IS NOT NULL DROP PROCEDURE Auditing.ErrorLogging;
-IF OBJECT_ID('Auditing.ErrorHandling', 'P')       IS NOT NULL DROP PROCEDURE Auditing.ErrorHandling;
+--Drop Procedures-----------------------------------  -------------------------------------------
+IF OBJECT_ID('Link.InsertObjectRelations', 'P')       IS NOT NULL DROP PROCEDURE Link.InsertObjectRelations;
+IF OBJECT_ID('SubSystems.InsertObjects', 'P')         IS NOT NULL DROP PROCEDURE SubSystems.InsertObjects;
+IF OBJECT_ID('ActiveDirectory.InsertGroupUsers', 'P') IS NOT NULL DROP PROCEDURE ActiveDirectory.InsertGroupUsers;
+IF OBJECT_ID('ActiveDirectory.InsertGroup', 'P')      IS NOT NULL DROP PROCEDURE ActiveDirectory.InsertGroup;
+IF OBJECT_ID('ActiveDirectory.InsertUser', 'P')       IS NOT NULL DROP PROCEDURE ActiveDirectory.InsertUser;
+IF OBJECT_ID('Auditing.ErrorLogging', 'P')	          IS NOT NULL DROP PROCEDURE Auditing.ErrorLogging;
+IF OBJECT_ID('Auditing.ErrorHandling', 'P')           IS NOT NULL DROP PROCEDURE Auditing.ErrorHandling;
 -------------------------------------------------------------------------------------------------
 PRINT 'Dropping tables';
 --Drop tables----------------------------------  ------------------------------------------------
@@ -58,7 +62,9 @@ CREATE TABLE ActiveDirectory.Users(
   UserID    INT  IDENTITY(1,1),
   Username  NVARCHAR(100) NOT NULL,
   CONSTRAINT  PK_UserID
-  PRIMARY KEY (UserID)
+  PRIMARY KEY (UserID),
+  CONSTRAINT  UQ_Username
+  UNIQUE      (Username)
 );
 GO
 
@@ -93,8 +99,9 @@ GO
 
 CREATE TABLE SubSystems.Objects(
   ObjectID    INT IDENTITY(1,1),
-  ObjectName  NVARCHAR(200),
   SourceID    INT NOT NULL,
+  ObjectName  NVARCHAR(200),
+  JsonData    NVARCHAR(4000),
   CONSTRAINT  PK_ObjectID
   PRIMARY KEY (ObjectID),
   CONSTRAINT  FK_SourceID_Sources
@@ -106,7 +113,6 @@ GO
 CREATE TABLE Link.ObjectRelations(
   ObjectID  INT NOT NULL,
   GroupID   INT NOT NULL,
-  JsonData  NVARCHAR(2000),
   CONSTRAINT  PK_ObjectID_GroupID
   PRIMARY KEY (ObjectID, GroupID)
 );
@@ -156,22 +162,10 @@ GO
 CREATE PROCEDURE Auditing.ErrorHandling
 AS
 	EXEC Auditing.ErrorLogging;		--Execute ErrorLogging, so we can log the error that triggered the catch block.
-	IF @@TRANCOUNT <> 0				--Check transaction count, if there is a uncommited transaction do a ROLLBACK.
-		BEGIN
-			ROLLBACK TRANSACTION;
-		END
-	IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
-		BEGIN
-			ROLLBACK TRANSACTION;
-		END
-	IF	XACT_STATE() = 1			--Check XACT_STATE in the case of uncommitable transactions 1 means the transaction is commitable.
-		BEGIN
-			COMMIT TRANSACTION;
-		END
 GO
 
 
-CREATE PROCEDURE ActiveDirectory.InsertUsers(
+CREATE PROCEDURE ActiveDirectory.InsertUser(
   @username NVARCHAR(100)
 )
 AS
@@ -186,12 +180,182 @@ BEGIN TRY
 			END
 		BEGIN
 			INSERT  ActiveDirectory.Users
-			VALUES  (@username)
+			VALUES  (@username);
 	    COMMIT TRANSACTION;
 			RETURN 1;
 		END
 END TRY
 BEGIN CATCH
+  IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	IF	XACT_STATE() = 1			--Check XACT_STATE in the case of uncommitable transactions 1 means the transaction is commitable.
+		BEGIN
+			COMMIT TRANSACTION;
+		END
+  IF @@TRANCOUNT <> 0				--Check transaction count, if there is a uncommited transaction do a ROLLBACK.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	EXEC Auditing.ErrorHandling;
+	RETURN 0;
+END CATCH;
+GO
+
+CREATE PROCEDURE ActiveDirectory.InsertGroup(
+  @GroupName  NVARCHAR(200),
+  @CN NVARCHAR(2000),
+  @DN NVARCHAR(2000)
+)
+AS
+BEGIN TRY
+  SET XACT_ABORT ON;
+	SET NOCOUNT ON;
+	BEGIN TRANSACTION
+	  IF (@GroupName IS NULL)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				THROW 1000, 'GroupName cannot be NULL', 1;
+			END
+		BEGIN
+			INSERT  ActiveDirectory.Groups
+			VALUES  (@GroupName, @CN, @DN);
+	    COMMIT TRANSACTION;
+			RETURN 1;
+		END
+END TRY
+BEGIN CATCH
+  IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	IF	XACT_STATE() = 1			--Check XACT_STATE in the case of uncommitable transactions 1 means the transaction is commitable.
+		BEGIN
+			COMMIT TRANSACTION;
+		END
+  IF @@TRANCOUNT <> 0				--Check transaction count, if there is a uncommited transaction do a ROLLBACK.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	EXEC Auditing.ErrorHandling;
+	RETURN 0;
+END CATCH;
+GO
+
+CREATE PROCEDURE ActiveDirectory.InsertGroupUsers(
+  @UserID   INT,
+  @GroupID  INT
+)
+AS
+BEGIN TRY
+  SET XACT_ABORT ON;
+	SET NOCOUNT ON;
+	BEGIN TRANSACTION
+	  IF (@UserID IS NULL) OR (@GroupID IS NULL)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				THROW 1000, 'UserID/GroupID cannot be NULL', 1;
+			END
+		BEGIN
+			INSERT  ActiveDirectory.GroupUsers
+			VALUES  (@UserID, @GroupID);
+	    COMMIT TRANSACTION;
+			RETURN 1;
+		END
+END TRY
+BEGIN CATCH
+  IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	IF	XACT_STATE() = 1			--Check XACT_STATE in the case of uncommitable transactions 1 means the transaction is commitable.
+		BEGIN
+			COMMIT TRANSACTION;
+		END
+  IF @@TRANCOUNT <> 0				--Check transaction count, if there is a uncommited transaction do a ROLLBACK.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	EXEC Auditing.ErrorHandling;
+	RETURN 0;
+END CATCH;
+GO
+
+CREATE PROCEDURE SubSystems.InsertObjects(
+  @SourceID INT,
+  @name     NVARCHAR(200),
+  @JsonData NVARCHAR(4000)
+)
+AS
+BEGIN TRY
+  SET XACT_ABORT ON;
+	SET NOCOUNT ON;
+	BEGIN TRANSACTION
+	  IF (@SourceID IS NULL)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				THROW 1000, 'SourceID cannot be NULL', 1;
+			END
+		BEGIN
+			INSERT  SubSystems.Objects
+			VALUES  (@SourceID, @name, @JsonData);
+	    COMMIT TRANSACTION;
+			RETURN 1;
+		END
+END TRY
+BEGIN CATCH
+  IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	IF	XACT_STATE() = 1			--Check XACT_STATE in the case of uncommitable transactions 1 means the transaction is commitable.
+		BEGIN
+			COMMIT TRANSACTION;
+		END
+  IF @@TRANCOUNT <> 0				--Check transaction count, if there is a uncommited transaction do a ROLLBACK.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	EXEC Auditing.ErrorHandling;
+	RETURN 0;
+END CATCH;
+GO
+
+CREATE PROCEDURE Link.InsertObjectRelations(
+  @ObjectID INT,
+  @GroupID  INT
+)
+AS
+BEGIN TRY
+  SET XACT_ABORT ON;
+	SET NOCOUNT ON;
+	BEGIN TRANSACTION
+	  IF (@ObjectID IS NULL) OR (@GroupID IS NULL)
+			BEGIN
+				ROLLBACK TRANSACTION;
+				THROW 1000, 'ObjectID/GroupID cannot be NULL', 1;
+			END
+		BEGIN
+			INSERT  Link.ObjectRelations
+			VALUES  (@ObjectID, @GroupID);
+	    COMMIT TRANSACTION;
+			RETURN 1;
+		END
+END TRY
+BEGIN CATCH
+  IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
+	IF	XACT_STATE() = 1			--Check XACT_STATE in the case of uncommitable transactions 1 means the transaction is commitable.
+		BEGIN
+			COMMIT TRANSACTION;
+		END
+  IF @@TRANCOUNT <> 0				--Check transaction count, if there is a uncommited transaction do a ROLLBACK.
+		BEGIN
+			ROLLBACK TRANSACTION;
+		END
 	EXEC Auditing.ErrorHandling;
 	RETURN 0;
 END CATCH;
