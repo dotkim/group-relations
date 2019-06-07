@@ -56,10 +56,10 @@ module.exports = class {
       .size(0);
   }
 
-  async getGroupObj(name) {
+  async getGroupObj() {
     try {
       return await this.groups
-        .find({ 'data.groups': { $in: [ name ] } });
+        .find();
     }
     catch (error) {
       console.error(error);
