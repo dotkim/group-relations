@@ -19,7 +19,7 @@ module.exports = class {
     }
   }
 
-  async insertUser(username) {
+  insertUser(username) {
     try {
       return this.pool
         .request()
@@ -31,7 +31,7 @@ module.exports = class {
     }
   }
 
-  async insertGroup(groupname, cn, dn) {
+  insertGroup(groupname, cn, dn) {
     try {
       return this.pool
         .request()
@@ -45,15 +45,52 @@ module.exports = class {
     }
   }
 
-  async insertGroupUser(group, user) {
+  insertGroupUser(groupid, userid) {
     try {
-      let gid = await this.pool.request().query(`SELECT GroupID FROM ActiveDirectory.Groups WHERE GroupName = '${group}'`);
-      let uid = await this.pool.request().query(`SELECT UserID FROM ActiveDirectory.Users WHERE Username = '${user}'`);
       return this.pool
         .request()
-        .input('GroupID', sql.Int, gid)
-        .input('UserID', sql.Int, uid)
-        .execute('ActiveDirectory.InsertGroupUser');
+        .input('GroupID', sql.Int, groupid)
+        .input('UserID', sql.Int, userid)
+        .execute('ActiveDirectory.InsertGroupUsers');
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+  
+  insertSubsystem(sourceid, name, data) {
+    try {
+      return this.pool
+        .request()
+        .input('SourceID', sql.Int, sourceid)
+        .input('name', sql.NVarChar, name)
+        .input('JsonData', sql.NVarChar, data)
+        .execute('SubSystems.InsertObjects');
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+  
+  insertSystemLink(ObjectID, GroupID) {
+    try {
+      return this.pool
+        .request()
+        .input('ObjectID', sql.Int, ObjectID)
+        .input('GroupID', sql.Int, GroupID)
+        .execute('Link.InsertObjectRelations');
+    }
+    catch (error) {
+      console.error(error);
+    }
+  }
+
+  getGroupid(name) {
+    try {
+      return this.pool
+        .request()
+        .input('GroupName', sql.NVarChar, name)
+        .execute('ActiveDirectory.SelectGroupID');
     }
     catch (error) {
       console.error(error);

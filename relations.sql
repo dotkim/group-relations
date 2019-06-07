@@ -16,6 +16,7 @@ GO
 
 PRINT 'Dropping procedures';
 --Drop Procedures-----------------------------------  -------------------------------------------
+IF OBJECT_ID('ActiveDirectory.SelectGroupID', 'P')    IS NOT NULL DROP PROCEDURE ActiveDirectory.SelectGroupID;
 IF OBJECT_ID('Link.InsertObjectRelations', 'P')       IS NOT NULL DROP PROCEDURE Link.InsertObjectRelations;
 IF OBJECT_ID('SubSystems.InsertObjects', 'P')         IS NOT NULL DROP PROCEDURE SubSystems.InsertObjects;
 IF OBJECT_ID('ActiveDirectory.InsertGroupUsers', 'P') IS NOT NULL DROP PROCEDURE ActiveDirectory.InsertGroupUsers;
@@ -74,7 +75,9 @@ CREATE TABLE ActiveDirectory.Groups(
   CanonicalName     NVARCHAR(1000),
   DistinguishedName NVARCHAR(1000),
   CONSTRAINT  PK_GroupID
-  PRIMARY KEY (GroupID)
+  PRIMARY KEY (GroupID),
+  CONSTRAINT  UQ_GroupName
+  UNIQUE      (GroupName)
 );
 GO
 
@@ -106,7 +109,9 @@ CREATE TABLE SubSystems.Objects(
   PRIMARY KEY (ObjectID),
   CONSTRAINT  FK_SourceID_Sources
   FOREIGN KEY (SourceID)
-  REFERENCES  SubSystems.Sources
+  REFERENCES  SubSystems.Sources,
+  CONSTRAINT  UQ_ObjectName
+  UNIQUE      (ObjectName)
 );
 GO
 
@@ -178,12 +183,28 @@ BEGIN TRY
 				ROLLBACK TRANSACTION;
 				THROW 1000, 'username cannot be NULL', 1;
 			END
-		BEGIN
-			INSERT  ActiveDirectory.Users
-			VALUES  (@username);
-	    COMMIT TRANSACTION;
-			RETURN 1;
-		END
+    IF EXISTS (
+      SELECT UserID
+      FROM ActiveDirectory.Users
+      WHERE Username = @username
+    )
+      BEGIN
+        SELECT UserID
+        FROM ActiveDirectory.Users
+        WHERE Username = @username;
+        COMMIT TRANSACTION;
+        RETURN 1;
+      END
+    ELSE
+		  BEGIN
+		  	INSERT  ActiveDirectory.Users
+		  	VALUES  (@username);
+	      COMMIT TRANSACTION;
+        SELECT  UserID
+        FROM    ActiveDirectory.Users
+        WHERE   Username = @username;
+		  	RETURN 1;
+		  END
 END TRY
 BEGIN CATCH
   IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
@@ -218,12 +239,28 @@ BEGIN TRY
 				ROLLBACK TRANSACTION;
 				THROW 1000, 'GroupName cannot be NULL', 1;
 			END
-		BEGIN
-			INSERT  ActiveDirectory.Groups
-			VALUES  (@GroupName, @CN, @DN);
-	    COMMIT TRANSACTION;
-			RETURN 1;
-		END
+    IF EXISTS (
+      SELECT GroupID
+      FROM ActiveDirectory.Groups
+      WHERE GroupName = @GroupName
+    )
+      BEGIN
+        SELECT GroupID
+        FROM ActiveDirectory.Groups
+        WHERE GroupName = @GroupName;
+        COMMIT TRANSACTION;
+        RETURN 1;
+      END
+    ELSE
+		  BEGIN
+		  	INSERT  ActiveDirectory.Groups
+		  	VALUES  (@GroupName, @CN, @DN);
+	      COMMIT TRANSACTION;
+        SELECT  GroupID
+        FROM    ActiveDirectory.Groups
+        WHERE   GroupName = @GroupName;
+		  	RETURN 1;
+		  END
 END TRY
 BEGIN CATCH
   IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
@@ -297,12 +334,28 @@ BEGIN TRY
 				ROLLBACK TRANSACTION;
 				THROW 1000, 'SourceID cannot be NULL', 1;
 			END
-		BEGIN
-			INSERT  SubSystems.Objects
-			VALUES  (@SourceID, @name, @JsonData);
-	    COMMIT TRANSACTION;
-			RETURN 1;
-		END
+    IF EXISTS (
+      SELECT  ObjectID
+      FROM    SubSystems.Objects
+      WHERE   ObjectName = @name
+    )
+      BEGIN
+        SELECT  ObjectID
+        FROM    SubSystems.Objects
+        WHERE   ObjectName = @name;
+        COMMIT TRANSACTION;
+      END
+    ELSE
+		  BEGIN
+		  	INSERT  SubSystems.Objects
+		  	VALUES  (@SourceID, @name, @JsonData);
+	      COMMIT TRANSACTION;
+        SELECT  ObjectID
+        FROM    SubSystems.Objects
+        WHERE   ObjectName = @name
+        RETURN 1;
+		  	RETURN 1;
+		  END
 END TRY
 BEGIN CATCH
   IF	XACT_STATE() = -1			--Check XACT_STATE in the case of uncommitable transactions -1 means the transaction is uncommitable.
@@ -356,6 +409,21 @@ BEGIN CATCH
 		BEGIN
 			ROLLBACK TRANSACTION;
 		END
+	EXEC Auditing.ErrorHandling;
+	RETURN 0;
+END CATCH;
+GO
+
+CREATE PROCEDURE ActiveDirectory.SelectGroupID(
+  @GroupName  NVARCHAR(200)
+)
+AS
+BEGIN TRY
+  SELECT  GroupID
+  FROM    ActiveDirectory.Groups
+  WHERE   GroupName = @GroupName;
+END TRY
+BEGIN CATCH
 	EXEC Auditing.ErrorHandling;
 	RETURN 0;
 END CATCH;
